@@ -100,7 +100,7 @@
 
     <div id="fase3" style="display:none;">
       <div id="gameTurn" class="status-banner"></div>
-      <button type="button" id="btnVoice" class="btn-secondary" onclick="enableBareseVoice()">🔊 Attiva voce barese su questo telefono</button>
+      <button type="button" id="btnVoice" class="btn-secondary" onclick="enableSmorfiaVoice()">🔊 Attiva voce Smorfia napoletana</button>
       <div id="voiceStatus" style="font-size:0.78em; color:#a08a7e; margin:2px 0 8px;">Attiva la voce una volta su ogni telefono.</div>
       <div id="winnerNotice" class="winner-box" style="display:none;">🎉 HAI VINTO! Non puoi più chiamare numeri.</div>
       <div id="gameBoard" class="grid"></div>
@@ -121,7 +121,7 @@
   <script>
     let isMultiplayer = false, isHost = false, peer = null, connections = [], hostConn = null;
     let players = [], secrets = {}, choiceIndex = 0, selectedTempNum = null, activePlayers = [], turnIndex = 0, myName = '';
-    let bareseVoiceEnabled = false;
+    let smorfiaVoiceEnabled = false;
 
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btnSingleMode').addEventListener('click', startSinglePhoneMode);
@@ -131,40 +131,44 @@
     });
 
 
-    // Forme in barese per i numeri del tabellone (1-50).
-    // La grafia dialettale varia: queste forme privilegiano una lettura chiara con le voci italiane dei telefoni.
-    const numeriBaresi = [
-      '', 'iùne', 'du', 'ttrè', 'quàtte', 'cinghe', 'sé', 'ssètte', 'uètte', 'nnove', 'ddèsce',
-      'ùndese', 'dudese', 'tredese', 'quattordese', 'quìndese', 'sedese', 'diciasètte', 'diciuètte', 'diciannòve',
-      'vìnde', 'vintìune', 'vintidù', 'vintitrè', 'vintiquàtte', 'vinticinghe', 'vintisé', 'vintissètte', 'vintiuètte', 'vintinnove',
-      'trènde', 'trendìune', 'trendidù', 'trenditrè', 'trendiquàtte', 'trendicinghe', 'trendisé', 'trendissètte', 'trendiuètte', 'trendinnove',
-      'quarànde', 'quarandìune', 'quarandidù', 'quaranditrè', 'quarandiquàtte', 'quarandicinghe', 'quarandisé', 'quarandissètte', 'quarandiuètte', 'quarandinnove',
-      'cinghuànde'
+    // Smorfia napoletana tradizionale per i numeri del tabellone (1-50).
+    const smorfiaNapoletana = [
+      '', "L'Italia", "'A piccerella", "'A gatta", "'O puorco", "'A mano",
+      "Chella ca guarda 'nterra", "'O vaso", "'A Maronna", "'A figliata", "'E fasule",
+      "'E surice", "'O sordato", "Sant'Antonio", "'O 'mbriaco", "'O guaglione",
+      "'O culo", "'A disgrazia", "'O sanghe", "'A resata", "'A festa",
+      "'A femmena annura", "'O pazzo", "'O scemo", "'E gguardie", "Natale",
+      "Nanninella", "'O cantero", "'E zizze", "'O pate d''e criature",
+      "'E ppalle d''o tenente", "'O padrone 'e casa", "'O capitone", "Ll'anne 'e Cristo",
+      "'A capa", "L'aucielluzzo", "'E ccastagnelle", "'O monaco", "'E mmazzate",
+      "'A funa 'nganna", "'A paposcia", "'O curtiello", "'O ccafè",
+      "'Onna Pereta fore 'o barcone", "'E ccancelle", "'O vino bbuono",
+      "'E denare", "'O muorto", "'O muorto che pparla", "'O piezzo 'e carne", "'O ppane"
     ];
 
-    function enableBareseVoice() {
+    function enableSmorfiaVoice() {
       if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
         document.getElementById('voiceStatus').innerText = 'La sintesi vocale non è disponibile su questo telefono.';
         return;
       }
       // Il tocco dell'utente abilita la sintesi vocale sui browser mobili.
-      bareseVoiceEnabled = true;
+      smorfiaVoiceEnabled = true;
       const sblocco = new SpeechSynthesisUtterance(' ');
       sblocco.lang = 'it-IT';
       sblocco.volume = 0;
       sblocco.onend = () => { window.speechSynthesis.resume(); };
       window.speechSynthesis.speak(sblocco);
-      document.getElementById('btnVoice').innerText = '🔊 Voce barese attiva';
+      document.getElementById('btnVoice').innerText = '🔊 Voce napoletana attiva';
       document.getElementById('btnVoice').style.background = 'var(--saved)';
       document.getElementById('btnVoice').style.color = '#fff';
       document.getElementById('voiceStatus').innerText = 'Annuncerò automaticamente ogni numero estratto.';
     }
 
-    function annunciaNumeroInBarese(num) {
-      if (!bareseVoiceEnabled || !numeriBaresi[num] || !('speechSynthesis' in window)) return;
+    function annunciaNumeroSmorfia(num) {
+      if (!smorfiaVoiceEnabled || !smorfiaNapoletana[num] || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
-      const voce = new SpeechSynthesisUtterance(numeriBaresi[num]);
+      const voce = new SpeechSynthesisUtterance(`Numero ${num}... ${smorfiaNapoletana[num]}`);
       voce.lang = 'it-IT';
       const vociDisponibili = window.speechSynthesis.getVoices();
       const voceItaliana = vociDisponibili.find(v => /^it([-_]|$)/i.test(v.lang));
@@ -379,7 +383,7 @@
       const currentPlayer = oldPlayers[currentIndex];
 
       element.classList.add('revealed');
-      annunciaNumeroInBarese(num);
+      annunciaNumeroSmorfia(num);
       const savedPlayers = Object.keys(secrets).filter(p => secrets[p] === num && activePlayers.includes(p));
 
       if (savedPlayers.length > 0) {
