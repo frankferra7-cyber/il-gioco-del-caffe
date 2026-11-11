@@ -47,7 +47,7 @@
     .tile:hover { background: var(--tile-hover); }
     .tile.revealed { background: #0a0503; color: #442617; border-color: #22110a; cursor: default; }
     .tile.saved { background: var(--saved) !important; color: #fff !important; font-size: 0.75em; word-break: break-all; padding: 2px; }
-    .winner-screen { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 24px; background: radial-gradient(circle at center, #245b35 0%, #10351f 55%, #071b10 100%); text-align: center; }
+    .winner-screen { position: fixed; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100vh; height: 100dvh; z-index: 2147483647; display: none; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); background: radial-gradient(circle at center, #245b35 0%, #10351f 55%, #071b10 100%); text-align: center; overflow-y: auto; }
     .winner-screen.visible { display: flex; }
     .winner-screen-inner { width: 100%; max-width: 560px; padding: 36px 22px; border: 4px solid #f5d77b; border-radius: 28px; background: rgba(5, 30, 15, 0.88); box-shadow: 0 0 45px rgba(245, 215, 123, 0.35); }
     .winner-screen .winner-emoji { font-size: clamp(3.5rem, 16vw, 6rem); margin-bottom: 16px; }
@@ -367,8 +367,12 @@
       }
     }
 
-    function showWinnerScreen() {
+    function showWinnerScreen(winners) {
       const screen = document.getElementById('winnerScreen');
+      const title = screen ? screen.querySelector('h2') : null;
+      const message = screen ? screen.querySelector('p') : null;
+      if (title) title.innerText = 'HAI VINTO!';
+      if (message) message.innerText = winners ? winners + (winners.includes(',') ? ' HANNO VINTO!' : ' HAI VINTO!') : 'IL TUO NUMERO È USCITO!';
       if (screen) screen.classList.add('visible');
       const notice = document.getElementById('winnerNotice');
       if (notice) notice.style.display = 'none';
@@ -391,11 +395,8 @@
         element.innerText = `🎉 ${savedPlayers.join(', ')}`;
         activePlayers = activePlayers.filter(p => !savedPlayers.includes(p));
 
-        if (isMultiplayer && savedPlayers.includes(myName)) {
-          showWinnerScreen();
-        } else if (!isMultiplayer) {
-          document.getElementById('winnerNotice').style.display = 'block';
-          document.getElementById('winnerNotice').innerText = `🎉 ${savedPlayers.join(', ')} HAI VINTO!`;
+        if ((isMultiplayer && savedPlayers.includes(myName)) || !isMultiplayer) {
+          showWinnerScreen(savedPlayers.join(', '));
         }
 
         if (activePlayers.length === 1) {
