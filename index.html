@@ -296,6 +296,24 @@
       try { localStorage.removeItem(GAME_SAVE_KEY); } catch (error) {}
     }
 
+    // A partita conclusa elimina il salvataggio locale e libera la stanza multiplayer.
+    let gameCleanupTimer = null;
+    function finishGameCleanup() {
+      clearGameSave();
+      if (gameCleanupTimer) clearTimeout(gameCleanupTimer);
+      // Lascia il tempo al messaggio finale di raggiungere tutti i telefoni.
+      gameCleanupTimer = setTimeout(() => {
+        try {
+          if (peer && !peer.destroyed) peer.destroy();
+        } catch (error) {}
+        connections = [];
+        hostConn = null;
+        peer = null;
+        window.gameRoomCode = '';
+        gameCleanupTimer = null;
+      }, 2500);
+    }
+
     function restoreGameState(state) {
       if (!state || state.phase !== 'game' || !Array.isArray(state.players) ||
           !state.players.length || !state.secrets) return;
@@ -341,7 +359,8 @@
         showWinnerScreen(myName);
       }
       restoringSavedGame = false;
-      saveGameState();
+      if (activePlayers.length <= 1) finishGameCleanup();
+      else saveGameState();
     }
 
     function connectRestoredHost(roomCode) {
@@ -374,7 +393,8 @@
       try { state = JSON.parse(localStorage.getItem(GAME_SAVE_KEY) || 'null'); } catch (error) {}
       if (!state || state.phase !== 'game') return;
       restoreGameState(state);
-      if (state.isMultiplayer && state.roomCode) {
+      if (state.isMultiplayer && state.roomCode &&
+          Array.isArray(state.activePlayers) && state.activePlayers.length > 1) {
         window.gameRoomCode = state.roomCode;
         if (state.isHost) connectRestoredHost(state.roomCode);
         else connectRestoredClient(state.roomCode);
@@ -706,14 +726,14 @@
             document.getElementById('payerScreen').classList.add('visible');
           }
           document.getElementById('btnRestart').style.display = 'block';
-          saveGameState();
+          finishGameCleanup();
           return;
         } else if (activePlayers.length === 0) {
           document.getElementById('gameTurn').style.display = 'none';
           document.getElementById('loserNotice').style.display = 'block';
           document.getElementById('loserNotice').innerText = '☕ PAREGGIO! PAGATE IL CAFFÈ INSIEME!';
           document.getElementById('btnRestart').style.display = 'block';
-          saveGameState();
+          finishGameCleanup();
           return;
         }
 
