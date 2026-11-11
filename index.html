@@ -54,6 +54,12 @@
     .winner-screen h2 { color: #ffe08a; font-size: clamp(2.6rem, 12vw, 4.5rem); line-height: 1.05; margin-bottom: 20px; }
     .winner-screen p { color: #fff8df; font-size: clamp(1.15rem, 5vw, 1.6rem); line-height: 1.45; }
     .loser-box { background: var(--danger); color: #fff; padding: 18px; border-radius: 12px; font-size: 1.3em; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4); }
+    .payer-screen { position: fixed; inset: 0; z-index: 2147483646; display: none; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); background: radial-gradient(circle at center, #f3d7a6 0%, #d28a55 55%, #8f452f 100%); text-align: center; }
+    .payer-screen.visible { display: flex; }
+    .payer-screen-inner { width: 100%; max-width: 560px; padding: 38px 22px; border: 4px solid #fff1d0; border-radius: 28px; background: rgba(74, 37, 25, .94); color: #fff8df; box-shadow: 0 0 45px rgba(74, 37, 25, .3); }
+    .payer-screen .payer-emoji { font-size: clamp(4rem, 18vw, 7rem); margin-bottom: 18px; }
+    .payer-screen h2 { color: #ffe08a; font-size: clamp(2.2rem, 10vw, 4rem); line-height: 1.08; margin-bottom: 20px; }
+    .payer-screen p { color: #fff8df; font-size: clamp(1.2rem, 5vw, 1.7rem); line-height: 1.45; }
     .player-tag { display: inline-block; background: var(--tile-bg); border: 1px solid var(--accent); padding: 6px 12px; border-radius: 12px; margin: 4px; font-size: 0.9em; }
     .room-code { font-size: 2.2em; letter-spacing: 4px; color: var(--gold); margin: 10px 0; }
     .section-title { font-size: 0.95em; color: var(--accent); font-weight: bold; margin-top: 12px; text-transform: uppercase; letter-spacing: 1px; }
@@ -209,6 +215,15 @@
     </div>
   </div>
 
+  <div id="payerScreen" class="payer-screen" role="alert" aria-live="assertive">
+    <div class="payer-screen-inner">
+      <div class="payer-emoji">☕💸</div>
+      <h2>TOCCA A TE!</h2>
+      <p>SEI TU CHE OFFRI IL CAFFÈ!</p>
+      <p style="margin-top:14px;">Grazie! Il prossimo giro è tuo 😉</p>
+    </div>
+  </div>
+
   <div id="winnerScreen" class="winner-screen" role="alert" aria-live="assertive">
     <div class="winner-screen-inner">
       <div class="winner-emoji">🏆🎉☕</div>
@@ -279,6 +294,9 @@
         document.getElementById('loserNotice').innerText = activePlayers.length
           ? `☕ ${activePlayers[0]} PAGA IL CAFFÈ PER TUTTI!`
           : '☕ PAREGGIO! PAGATE IL CAFFÈ INSIEME!';
+        if (isMultiplayer && activePlayers.length === 1 && activePlayers[0] === myName) {
+          document.getElementById('payerScreen').classList.add('visible');
+        }
         document.getElementById('btnRestart').style.display = 'block';
       }
       const mySecretWasRevealed = (state.revealed || []).includes(secrets[myName]);
@@ -616,6 +634,9 @@
           document.getElementById('gameTurn').style.display = 'none';
           document.getElementById('loserNotice').style.display = 'block';
           document.getElementById('loserNotice').innerText = `☕ ${activePlayers[0]} PAGA IL CAFFÈ PER TUTTI!`;
+          if (isMultiplayer && activePlayers[0] === myName) {
+            document.getElementById('payerScreen').classList.add('visible');
+          }
           document.getElementById('btnRestart').style.display = 'block';
           saveGameState();
           return;
@@ -624,6 +645,7 @@
           document.getElementById('loserNotice').style.display = 'block';
           document.getElementById('loserNotice').innerText = '☕ PAREGGIO! PAGATE IL CAFFÈ INSIEME!';
           document.getElementById('btnRestart').style.display = 'block';
+          saveGameState();
           return;
         }
 
