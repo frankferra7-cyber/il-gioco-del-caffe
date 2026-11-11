@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gioco-del-caffe-v6';
+const CACHE_NAME = 'gioco-del-caffe-v7';
 const APP_SHELL = [
   './',
   './index.html',
