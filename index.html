@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>☕ Il Gioco del Caffè</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#120a07">
+  <meta name="description" content="Il Gioco del Caffè: scegli i numeri, gioca con gli amici e scopri chi paga il caffè.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gioco Caffè">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gioco Caffè">
+
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #120a07;
+      --card-bg: #1e110b;
+      --accent: #d4a373;
+      --gold: #faedcd;
+      --tile-bg: #2c1a12;
+      --tile-hover: #3d2419;
+      --saved: #2a9d8f;
+      --danger: #e63946;
+      --text: #fefae0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg-dark); color: var(--text); padding: max(15px, env(safe-area-inset-top)) 15px max(15px, env(safe-area-inset-bottom)); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+    .card { background: var(--card-bg); border: 2px solid var(--accent); border-radius: 20px; padding: 20px; width: 100%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); text-align: center; }
+    h1 { color: var(--accent); font-size: 1.8em; margin-bottom: 4px; }
+    .subtitle { color: #a08a7e; font-size: 0.85em; margin-bottom: 15px; }
+    input, button { width: 100%; min-height: 48px; padding: 14px; margin: 8px 0; border-radius: 10px; border: none; font-size: 1.05em; box-sizing: border-box; font-weight: bold; }
+    input { background: var(--bg-dark); color: #fff; border: 1px solid var(--accent); text-align: center; }
+    button { background: var(--accent); color: var(--bg-dark); cursor: pointer; transition: transform 0.1s; }
+    button:active { transform: scale(0.98); }
+    .btn-secondary { background: #3d2419; color: var(--gold); border: 1px solid var(--accent); }
+    .status-banner { background: rgba(212, 163, 115, 0.15); border: 1px dashed var(--accent); padding: 12px; border-radius: 10px; color: var(--gold); font-weight: bold; margin: 12px 0; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 15px; }
+    .tile { aspect-ratio: 1; touch-action: manipulation; -webkit-tap-highlight-color: transparent; background: var(--tile-bg); border: 1px solid var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 8px; font-size: 1.1em; cursor: pointer; user-select: none; transition: all 0.2s; }
+    .tile:hover { background: var(--tile-hover); }
+    .tile.revealed { background: #0a0503; color: #442617; border-color: #22110a; cursor: default; }
+    .tile.saved { background: var(--saved) !important; color: #fff !important; font-size: 0.75em; word-break: break-all; padding: 2px; }
+    .loser-box { background: var(--danger); color: #fff; padding: 18px; border-radius: 12px; font-size: 1.3em; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4); }
+    .player-tag { display: inline-block; background: var(--tile-bg); border: 1px solid var(--accent); padding: 6px 12px; border-radius: 12px; margin: 4px; font-size: 0.9em; }
+    .room-code { font-size: 2.2em; letter-spacing: 4px; color: var(--gold); margin: 10px 0; }
+    .section-title { font-size: 0.95em; color: var(--accent); font-weight: bold; margin-top: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>☕ Il Gioco del Caffè</h1>
+    <div class="subtitle">(PWA App • Offline & Multiplayer)</div>
+    
+    <div id="faseInit">
+      <input type="text" id="pName" placeholder="Inserisci qui il tuo nome...">
+      <button type="button" id="btnSingleMode">📱 Gioca su Unico Telefono (Passa-Telefono)</button>
+      <button type="button" id="btnMultiMode" class="btn-secondary">🌐 Gioca su Più Telefoni (Multiplayer)</button>
+    </div>
+
+    <div id="faseMultiSetup" style="display:none;">
+      <div class="section-title">🏠 CREA UNA STANZA</div>
+      <input type="text" id="createRoomInput" placeholder="Nome/Codice Stanza (es. BAR123)">
+      <button type="button" id="btnCreateRoom">➕ Crea Stanza</button>
+      
+      <div style="margin: 20px 0; border-bottom: 1px solid #3d2419;"></div>
+      
+      <div class="section-title">🔗 UNISCITI A UNA STANZA</div>
+      <input type="text" id="roomInput" placeholder="Inserisci Codice Stanza dell'Host">
+      <button type="button" id="btnJoinRoom" class="btn-secondary">🔗 Unisciti alla Stanza</button>
+      
+      <button type="button" style="background:transparent; color:#a08a7e; margin-top:10px;" onclick="location.reload()">⬅ Torna Indietro</button>
+    </div>
+
+    <div id="faseLobby" style="display:none;">
+      <div id="lobbyStatus" class="status-banner">Connessione in corso...</div>
+      <div id="roomCodeDisplay" class="room-code" style="display:none;"></div>
+      <div id="playerListLobby" style="margin: 15px 0;"></div>
+      <button type="button" id="btnHostStart" style="display:none; background:var(--saved); color:#fff;" onclick="startMultiChoicePhase()">Avvia Scelta Numeri per Tutti ➔</button>
+    </div>
+
+    <div id="fase2" style="display:none;">
+      <div id="choiceTitle" class="status-banner"></div>
+      <p id="choiceSubtitle" style="font-size:0.8em; color:#a08a7e; margin-bottom:10px;">Scegli il tuo numero segreto!</p>
+      <div id="choiceGrid" class="grid"></div>
+      <button type="button" id="btnConfirmChoice" style="display:none; background:var(--saved); color:#fff; margin-top:12px;" onclick="confirmChoice()">Conferma Numero ✔</button>
+    </div>
+
+    <div id="fase3" style="display:none;">
+      <div id="gameTurn" class="status-banner"></div>
+      <div id="gameBoard" class="grid"></div>
+      <div id="loserNotice" class="loser-box" style="display:none;"></div>
+      <button type="button" id="btnRestart" style="display:none; margin-top:15px; background:var(--accent);" onclick="location.reload()">Nuova Partita 🔄</button>
+    </div>
+  </div>
+
+  <script>
+    let isMultiplayer = false, isHost = false, peer = null, connections = [], hostConn = null;
+    let players = [], secrets = {}, choiceIndex = 0, selectedTempNum = null, activePlayers = [], turnIndex = 0, myName = '';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btnSingleMode').addEventListener('click', startSinglePhoneMode);
+      document.getElementById('btnMultiMode').addEventListener('click', showMultiplayerSetup);
+      document.getElementById('btnCreateRoom').addEventListener('click', createRoomWithText);
+      document.getElementById('btnJoinRoom').addEventListener('click', joinRoom);
+    });
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[char]);
+    }
+
+    function startSinglePhoneMode() {
+      myName = document.getElementById('pName').value.trim();
+      if (!myName) return alert("Inserisci il tuo nome!");
+      players = [myName];
+      document.getElementById('faseInit').innerHTML = `
+        <div class="status-banner">Modalità Passa-Telefono</div>
+        <input type="text" id="addNameInp" placeholder="Nome altro giocatore...">
+        <button type="button" id="btnAddPlayerBtn">+ Aggiungi Giocatore</button>
+        <div id="pList" style="margin: 12px 0;"></div>
+        <button type="button" id="btnStartSingle" style="display:none; background:var(--saved); color:#fff; margin-top:10px;" onclick="startChoicePhase()">Inizia Scelta Numeri Segreti ➔</button>
+      `;
+      document.getElementById('btnAddPlayerBtn').addEventListener('click', addSinglePlayer);
+      renderSinglePlayerList();
+    }
+
+    function addSinglePlayer() {
+      const inp = document.getElementById('addNameInp');
+      const name = inp.value.trim();
+      if (name && !players.includes(name)) {
+        players.push(name);
+        inp.value = '';
+        renderSinglePlayerList();
+      }
+    }
+
+    function renderSinglePlayerList() {
+      document.getElementById('pList').innerHTML = players.map(p => `<span class="player-tag">${escapeHtml(p)}</span>`).join('');
+      if (players.length >= 2) document.getElementById('btnStartSingle').style.display = 'block';
+    }
+
+    function showMultiplayerSetup() {
+      myName = document.getElementById('pName').value.trim();
+      if (!myName) return alert("Inserisci prima il tuo nome nel campo in alto!");
+      document.getElementById('faseInit').style.display = 'none';
+      document.getElementById('faseMultiSetup').style.display = 'block';
+    }
+
+    function createRoomWithText() {
+      let customCode = document.getElementById('createRoomInput').value.trim().toUpperCase() || Math.floor(1000 + Math.random() * 9000).toString();
+      isMultiplayer = true; isHost = true; players = [myName];
+      document.getElementById('faseMultiSetup').style.display = 'none';
+      document.getElementById('faseLobby').style.display = 'block';
+      document.getElementById('lobbyStatus').innerText = 'Stanza creata! In attesa degli altri giocatori...';
+      document.getElementById('roomCodeDisplay').style.display = 'block';
+      document.getElementById('roomCodeDisplay').innerText = `CODICE STANZA: ${customCode}`;
+      peer = new Peer('caffe-game-' + customCode.replace(/[^a-zA-Z0-9]/g, ''));
+      peer.on('open', () => { renderLobbyPlayers(); document.getElementById('btnHostStart').style.display = 'block'; });
+      peer.on('error', (err) => { if(err.type === 'unavailable-id') { alert('Stanza già in uso!'); location.reload(); } });
+      peer.on('connection', (conn) => {
+        connections.push(conn);
+        conn.on('data', (data) => handleHostMessage(data, conn));
+        conn.on('close', () => { connections = connections.filter(c => c !== conn); });
+      });
+    }
+
+    function joinRoom() {
+      let code = document.getElementById('roomInput').value.trim().toUpperCase();
+      if (!code) return alert("Inserisci il codice della stanza!");
+      isMultiplayer = true; isHost = false;
+      document.getElementById('faseMultiSetup').style.display = 'none';
+      document.getElementById('faseLobby').style.display = 'block';
+      document.getElementById('lobbyStatus').innerText = 'Connessione alla stanza in corso...';
+      peer = new Peer();
+      peer.on('open', () => {
+        hostConn = peer.connect('caffe-game-' + code.replace(/[^a-zA-Z0-9]/g, ''));
+        hostConn.on('open', () => { hostConn.send({ type: 'JOIN', name: myName }); });
+        hostConn.on('data', handleClientMessage);
+      });
+      peer.on('error', () => { alert('Stanza non trovata!'); location.reload(); });
+    }
+
+    function handleHostMessage(data, conn) {
+      if (data.type === 'JOIN' && !players.includes(data.name)) {
+        players.push(data.name); broadcast({ type: 'LOBBY_UPDATE', players: players }); renderLobbyPlayers();
+      } else if (data.type === 'SECRET_CHOICE') {
+        secrets[data.name] = data.num;
+        if (Object.keys(secrets).length === players.length) { broadcast({ type: 'START_GAME' }); startGame(); }
+      } else if (data.type === 'REVEAL_TILE') {
+        broadcast({ type: 'REVEAL_TILE', num: data.num }); processRevealTile(data.num);
+      }
+    }
+
+    function handleClientMessage(data) {
+      if (data.type === 'LOBBY_UPDATE') { players = data.players; renderLobbyPlayers(); }
+      else if (data.type === 'START_CHOICE') { startMultiChoicePhaseLocal(); }
+      else if (data.type === 'START_GAME') { startGame(); }
+      else if (data.type === 'REVEAL_TILE') { processRevealTile(data.num); }
+    }
+
+    function broadcast(data) { connections.forEach(conn => conn.send(data)); }
+    function renderLobbyPlayers() { document.getElementById('playerListLobby').innerHTML = players.map(p => `<span class="player-tag">${escapeHtml(p)}</span>`).join(''); }
+    function startMultiChoicePhase() { broadcast({ type: 'START_CHOICE' }); startMultiChoicePhaseLocal(); }
+    function startMultiChoicePhaseLocal() { document.getElementById('faseLobby').style.display = 'none'; document.getElementById('fase2').style.display = 'block'; renderChoiceGridMulti(); }
+
+    function renderChoiceGridMulti() {
+      selectedTempNum = null; document.getElementById('btnConfirmChoice').style.display = 'none';
+      document.getElementById('choiceTitle').innerText = `👤 ${myName}, scegli il tuo numero:`;
+      const grid = document.getElementById('choiceGrid'); grid.innerHTML = '';
+      for (let i = 1; i <= 50; i++) {
+        const tile = document.createElement('div'); tile.className = 'tile'; tile.innerText = i;
+        tile.onclick = () => {
+          document.querySelectorAll('#choiceGrid .tile').forEach(t => t.style.border = '1px solid var(--accent)');
+          tile.style.border = '3px solid #fff'; selectedTempNum = i; document.getElementById('btnConfirmChoice').style.display = 'block';
+        };
+        grid.appendChild(tile);
+      }
+    }
+
+    function startChoicePhase() { document.getElementById('faseInit').style.display = 'none'; document.getElementById('fase2').style.display = 'block'; choiceIndex = 0; renderChoiceGrid(); }
+
+    function renderChoiceGrid() {
+      selectedTempNum = null; document.getElementById('btnConfirmChoice').style.display = 'none';
+      document.getElementById('choiceTitle').innerText = `👤 ${players[choiceIndex]}, scegli il tuo numero:`;
+      const grid = document.getElementById('choiceGrid'); grid.innerHTML = '';
+      for (let i = 1; i <= 50; i++) {
+        const tile = document.createElement('div'); tile.className = 'tile'; tile.innerText = i;
+        tile.onclick = () => {
+          document.querySelectorAll('#choiceGrid .tile').forEach(t => t.style.border = '1px solid var(--accent)');
+          tile.style.border = '3px solid #fff'; selectedTempNum = i; document.getElementById('btnConfirmChoice').style.display = 'block';
+        };
+        grid.appendChild(tile);
+      }
+    }
+
+    function confirmChoice() {
+      if (!selectedTempNum) return;
+      if (isMultiplayer) {
+        if (isHost) {
+          secrets[myName] = selectedTempNum;
+          if (Object.keys(secrets).length === players.length) { broadcast({ type: 'START_GAME' }); startGame(); }
+          else { document.getElementById('fase2').innerHTML = `<div class="status-banner">Numero confermato! In attesa degli altri...</div>`; }
+        } else {
+          hostConn.send({ type: 'SECRET_CHOICE', name: myName, num: selectedTempNum });
+          document.getElementById('fase2').innerHTML = `<div class="status-banner">Numero confermato! In attesa degli altri...</div>`;
+        }
+        return;
+      }
+      secrets[players[choiceIndex]] = selectedTempNum; choiceIndex++;
+      if (choiceIndex < players.length) renderChoiceGrid(); else startGame();
+    }
+
+    function startGame() {
+      document.getElementById('fase2').style.display = 'none'; document.getElementById('fase3').style.display = 'block';
+      activePlayers = [...players]; turnIndex = 0;
+      const board = document.getElementById('gameBoard'); board.innerHTML = '';
+      for (let i = 1; i <= 50; i++) {
+        const tile = document.createElement('div'); tile.className = 'tile'; tile.innerText = i; tile.setAttribute('data-num', i);
+        tile.onclick = () => {
+          if (isMultiplayer) {
+            if (isHost) { broadcast({ type: 'REVEAL_TILE', num: i }); processRevealTile(i); }
+            else { hostConn.send({ type: 'REVEAL_TILE', num: i }); }
+          } else { processRevealTile(i); }
+        };
+        board.appendChild(tile);
+      }
+      updateTurnBanner();
+    }
+
+    function updateTurnBanner() {
+      if (activePlayers.length > 1) document.getElementById('gameTurn').innerText = `👉 Tocca a: ${activePlayers[turnIndex % activePlayers.length]}`;
+    }
+
+    function processRevealTile(num) {
+      const element = document.querySelector(`.tile[data-num="${num}"]`);
+      if (!element || element.classList.contains('revealed') || activePlayers.length <= 1) return;
+      element.classList.add('revealed');
+      const savedPlayers = Object.keys(secrets).filter(p => secrets[p] === num && activePlayers.includes(p));
+      if (savedPlayers.length > 0) {
+        element.classList.add('saved'); element.innerText = `🎉 ${savedPlayers.join(', ')}`;
+        activePlayers = activePlayers.filter(p => !savedPlayers.includes(p));
+        if (activePlayers.length === 1) {
+          document.getElementById('gameTurn').style.display = 'none';
+          document.getElementById('loserNotice').style.display = 'block';
+          document.getElementById('loserNotice').innerText = `☕ ${activePlayers[0]} PAGA IL CAFFÈ PER TUTTI!`;
+          document.getElementById('btnRestart').style.display = 'block'; return;
+        } else if (activePlayers.length === 0) {
+          document.getElementById('gameTurn').style.display = 'none';
+          document.getElementById('loserNotice').style.display = 'block';
+          document.getElementById('loserNotice').innerText = `☕ PAREGGIO! PAGATE IL CAFFÈ INSIEME!`;
+          document.getElementById('btnRestart').style.display = 'block'; return;
+        }
+      }
+      turnIndex++; updateTurnBanner();
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('Service worker non disponibile:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
