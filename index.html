@@ -181,7 +181,7 @@
       <input type="text" id="roomInput" placeholder="Inserisci Codice Stanza dell'Host">
       <button type="button" id="btnJoinRoom" class="btn-secondary">🔗 Unisciti alla Stanza</button>
       
-      <button type="button" style="background:transparent; color:#a08a7e; margin-top:10px;" onclick="location.reload()">⬅ Torna Indietro</button>
+      <button type="button" style="background:transparent; color:#a08a7e; margin-top:10px;" onclick="clearGameSave(); location.reload()">⬅ Torna Indietro</button>
     </div>
 
     <div id="faseLobby" style="display:none;">
@@ -205,7 +205,7 @@
       <div id="winnerNotice" class="winner-box" style="display:none;">🎉 HAI VINTO! Non puoi più chiamare numeri.</div>
       <div id="gameBoard" class="grid"></div>
       <div id="loserNotice" class="loser-box" style="display:none;"></div>
-      <button type="button" id="btnRestart" style="display:none; margin-top:15px; background:var(--accent);" onclick="location.reload()">Nuova Partita 🔄</button>
+      <button type="button" id="btnRestart" style="display:none; margin-top:15px; background:var(--accent);" onclick="clearGameSave(); location.reload()">Nuova Partita 🔄</button>
     </div>
   </div>
 
@@ -223,11 +223,115 @@
     let players = [], secrets = {}, choiceIndex = 0, selectedTempNum = null, activePlayers = [], turnIndex = 0, myName = '';
     let smorfiaVoiceEnabled = false;
 
+    // Salvataggio automatico della partita sul dispositivo.
+    const GAME_SAVE_KEY = 'il-gioco-del-caffe-partita-v1';
+    let restoringSavedGame = false;
+
+    function saveGameState() {
+      if (restoringSavedGame || !document.getElementById('fase3') ||
+          document.getElementById('fase3').style.display === 'none') return;
+      const revealed = Array.from(document.querySelectorAll('#gameBoard .tile.revealed'))
+        .map(tile => Number(tile.getAttribute('data-num')));
+      const state = {
+        phase: 'game', isMultiplayer, isHost, roomCode: window.gameRoomCode || '',
+        myName, players, secrets, activePlayers, turnIndex, revealed,
+        savedAt: Date.now()
+      };
+      try { localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(state)); } catch (error) {}
+    }
+
+    function clearGameSave() {
+      try { localStorage.removeItem(GAME_SAVE_KEY); } catch (error) {}
+    }
+
+    function restoreGameState(state) {
+      if (!state || state.phase !== 'game' || !Array.isArray(state.players) ||
+          !state.players.length || !state.secrets) return;
+      restoringSavedGame = true;
+      isMultiplayer = !!state.isMultiplayer;
+      isHost = !!state.isHost;
+      myName = state.myName || '';
+      players = state.players;
+      secrets = state.secrets;
+      activePlayers = Array.isArray(state.activePlayers) ? state.activePlayers : [...players];
+      turnIndex = Number(state.turnIndex) || 0;
+      document.getElementById('faseInit').style.display = 'none';
+      document.getElementById('faseMultiSetup').style.display = 'none';
+      document.getElementById('faseLobby').style.display = 'none';
+      document.getElementById('fase2').style.display = 'none';
+      startGame();
+      activePlayers = Array.isArray(state.activePlayers) ? state.activePlayers : [...players];
+      turnIndex = Number(state.turnIndex) || 0;
+      (state.revealed || []).forEach(num => {
+        const tile = document.querySelector(`#gameBoard .tile[data-num="${num}"]`);
+        if (!tile) return;
+        tile.classList.add('revealed');
+        const winners = Object.keys(secrets).filter(name => secrets[name] === num);
+        if (winners.length) {
+          tile.classList.add('saved');
+          tile.innerText = `🎉 ${winners.join(', ')}`;
+        }
+      });
+      if (activePlayers.length > 1) updateTurnBanner();
+      else {
+        document.getElementById('gameTurn').style.display = 'none';
+        document.getElementById('loserNotice').style.display = 'block';
+        document.getElementById('loserNotice').innerText = activePlayers.length
+          ? `☕ ${activePlayers[0]} PAGA IL CAFFÈ PER TUTTI!`
+          : '☕ PAREGGIO! PAGATE IL CAFFÈ INSIEME!';
+        document.getElementById('btnRestart').style.display = 'block';
+      }
+      const mySecretWasRevealed = (state.revealed || []).includes(secrets[myName]);
+      if (mySecretWasRevealed && (!isMultiplayer || !activePlayers.includes(myName))) {
+        showWinnerScreen(myName);
+      }
+      restoringSavedGame = false;
+      saveGameState();
+    }
+
+    function connectRestoredHost(roomCode) {
+      peer = new Peer('caffe-game-' + roomCode.replace(/[^a-zA-Z0-9]/g, ''));
+      peer.on('connection', conn => {
+        connections.push(conn);
+        conn.on('data', data => handleHostMessage(data, conn));
+        conn.on('close', () => { connections = connections.filter(c => c !== conn); });
+      });
+      peer.on('error', err => console.warn('Ripristino stanza:', err));
+    }
+
+    function connectRestoredClient(roomCode) {
+      peer = new Peer();
+      peer.on('open', () => {
+        hostConn = peer.connect('caffe-game-' + roomCode.replace(/[^a-zA-Z0-9]/g, ''));
+        hostConn.on('open', () => hostConn.send({ type: 'JOIN', name: myName }));
+        hostConn.on('data', handleClientMessage);
+        hostConn.on('error', () => {
+          document.getElementById('gameTurn').innerText = 'Riconnessione alla partita in corso...';
+        });
+      });
+      peer.on('error', () => {
+        document.getElementById('gameTurn').innerText = 'Connessione persa. Riprova ad aggiornare tra poco.';
+      });
+    }
+
+    function resumeSavedGame() {
+      let state = null;
+      try { state = JSON.parse(localStorage.getItem(GAME_SAVE_KEY) || 'null'); } catch (error) {}
+      if (!state || state.phase !== 'game') return;
+      restoreGameState(state);
+      if (state.isMultiplayer && state.roomCode) {
+        window.gameRoomCode = state.roomCode;
+        if (state.isHost) connectRestoredHost(state.roomCode);
+        else connectRestoredClient(state.roomCode);
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btnSingleMode').addEventListener('click', startSinglePhoneMode);
       document.getElementById('btnMultiMode').addEventListener('click', showMultiplayerSetup);
       document.getElementById('btnCreateRoom').addEventListener('click', createRoomWithText);
       document.getElementById('btnJoinRoom').addEventListener('click', joinRoom);
+      resumeSavedGame();
     });
 
 
@@ -324,6 +428,7 @@
 
     function createRoomWithText() {
       let customCode = document.getElementById('createRoomInput').value.trim().toUpperCase() || Math.floor(1000 + Math.random() * 9000).toString();
+      window.gameRoomCode = customCode;
       isMultiplayer = true; isHost = true; players = [myName];
       document.getElementById('faseMultiSetup').style.display = 'none';
       document.getElementById('faseLobby').style.display = 'block';
@@ -342,6 +447,7 @@
 
     function joinRoom() {
       let code = document.getElementById('roomInput').value.trim().toUpperCase();
+      window.gameRoomCode = code;
       if (!code) return alert("Inserisci il codice della stanza!");
       isMultiplayer = true; isHost = false;
       document.getElementById('faseMultiSetup').style.display = 'none';
@@ -359,6 +465,8 @@
     function handleHostMessage(data, conn) {
       if (data.type === 'JOIN' && !players.includes(data.name)) {
         players.push(data.name); broadcast({ type: 'LOBBY_UPDATE', players: players }); renderLobbyPlayers();
+      } else if (data.type === 'JOIN' && activePlayers.length) {
+        conn.send({ type: 'STATE', state: JSON.parse(localStorage.getItem(GAME_SAVE_KEY) || 'null') });
       } else if (data.type === 'SECRET_CHOICE') {
         secrets[data.name] = data.num;
         if (Object.keys(secrets).length === players.length) { broadcast({ type: 'START_GAME', secrets: secrets }); startGame(); }
@@ -374,6 +482,7 @@
       if (data.type === 'LOBBY_UPDATE') { players = data.players; renderLobbyPlayers(); }
       else if (data.type === 'START_CHOICE') { startMultiChoicePhaseLocal(); }
       else if (data.type === 'START_GAME') { secrets = data.secrets || {}; startGame(); }
+      else if (data.type === 'STATE' && data.state) { restoreGameState(data.state); }
       else if (data.type === 'REVEAL_TILE') { processRevealTile(data.num); }
     }
 
@@ -454,6 +563,7 @@
         board.appendChild(tile);
       }
       updateTurnBanner();
+      saveGameState();
     }
 
     function updateTurnBanner() {
@@ -504,6 +614,7 @@
           document.getElementById('loserNotice').style.display = 'block';
           document.getElementById('loserNotice').innerText = `☕ ${activePlayers[0]} PAGA IL CAFFÈ PER TUTTI!`;
           document.getElementById('btnRestart').style.display = 'block';
+          saveGameState();
           return;
         } else if (activePlayers.length === 0) {
           document.getElementById('gameTurn').style.display = 'none';
@@ -527,6 +638,7 @@
       }
 
       updateTurnBanner();
+      saveGameState();
     }
 
     if ('serviceWorker' in navigator) {
