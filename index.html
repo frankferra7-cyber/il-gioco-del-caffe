@@ -482,7 +482,10 @@
       if (data.type === 'LOBBY_UPDATE') { players = data.players; renderLobbyPlayers(); }
       else if (data.type === 'START_CHOICE') { startMultiChoicePhaseLocal(); }
       else if (data.type === 'START_GAME') { secrets = data.secrets || {}; startGame(); }
-      else if (data.type === 'STATE' && data.state) { restoreGameState(data.state); }
+      else if (data.type === 'STATE' && data.state) {
+        const localName = myName;
+        restoreGameState({ ...data.state, isHost: false, myName: localName });
+      }
       else if (data.type === 'REVEAL_TILE') { processRevealTile(data.num); }
     }
 
