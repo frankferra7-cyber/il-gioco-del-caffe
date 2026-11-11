@@ -223,11 +223,69 @@
     let players = [], secrets = {}, choiceIndex = 0, selectedTempNum = null, activePlayers = [], turnIndex = 0, myName = '';
     let smorfiaVoiceEnabled = false;
 
+    let introMusicPlayed = false;
+    let introAudioContext = null;
+
+    // Breve jingle originale in stile bar: tenta all'apertura e, se il browser
+    // blocca l'audio automatico, riprova al primo tocco dell'utente.
+    function playIntroMusic() {
+      if (introMusicPlayed) return;
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!introAudioContext) introAudioContext = new AudioContextClass();
+        const ctx = introAudioContext;
+        const begin = () => {
+          if (introMusicPlayed) return;
+          introMusicPlayed = true;
+          const notes = [
+            [523.25, 0], [659.25, 0.18], [783.99, 0.36],
+            [659.25, 0.56], [698.46, 0.78], [783.99, 0.98],
+            [659.25, 1.18], [523.25, 1.42]
+          ];
+          const startAt = ctx.currentTime + 0.06;
+          notes.forEach(([frequency, offset]) => {
+            const oscillator = ctx.createOscillator();
+            const gain = ctx.createGain();
+            oscillator.type = 'triangle';
+            oscillator.frequency.value = frequency;
+            gain.gain.setValueAtTime(0.0001, startAt + offset);
+            gain.gain.exponentialRampToValueAtTime(0.11, startAt + offset + 0.025);
+            gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.17);
+            oscillator.connect(gain);
+            gain.connect(ctx.destination);
+            oscillator.start(startAt + offset);
+            oscillator.stop(startAt + offset + 0.19);
+          });
+        };
+        if (ctx.state === 'running') begin();
+        else ctx.resume().then(begin).catch(() => {});
+      } catch (error) {
+        // Alcuni browser richiedono un'interazione prima di consentire l'audio.
+      }
+    }
+
+    function setupIntroMusic() {
+      playIntroMusic();
+      const unlock = () => {
+        playIntroMusic();
+        if (introMusicPlayed) {
+          window.removeEventListener('pointerdown', unlock);
+          window.removeEventListener('keydown', unlock);
+          window.removeEventListener('touchstart', unlock);
+        }
+      };
+      window.addEventListener('pointerdown', unlock, { passive: true });
+      window.addEventListener('keydown', unlock);
+      window.addEventListener('touchstart', unlock, { passive: true });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btnSingleMode').addEventListener('click', startSinglePhoneMode);
       document.getElementById('btnMultiMode').addEventListener('click', showMultiplayerSetup);
       document.getElementById('btnCreateRoom').addEventListener('click', createRoomWithText);
       document.getElementById('btnJoinRoom').addEventListener('click', joinRoom);
+      setupIntroMusic();
     });
 
 
