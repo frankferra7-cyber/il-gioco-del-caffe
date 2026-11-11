@@ -54,6 +54,19 @@
     .winner-screen h2 { color: #ffe08a; font-size: clamp(2.6rem, 12vw, 4.5rem); line-height: 1.05; margin-bottom: 20px; }
     .winner-screen p { color: #fff8df; font-size: clamp(1.15rem, 5vw, 1.6rem); line-height: 1.45; }
     .loser-box { background: var(--danger); color: #fff; padding: 18px; border-radius: 12px; font-size: 1.3em; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 15px rgba(230, 57, 70, 0.4); }
+    .package-reveal-overlay { position: fixed; inset: 0; z-index: 2147483644; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(48, 27, 18, .88); backdrop-filter: blur(7px); }
+    .package-reveal-overlay.visible { display: flex; }
+    .package-reveal-box { width: min(88vw, 390px); text-align: center; color: #fff8df; }
+    .package-reveal-label { font-family: Georgia, serif; font-size: clamp(1.25rem, 5vw, 1.7rem); color: #ffe2a8; letter-spacing: 2px; margin-bottom: 24px; }
+    .package-gift { position: relative; width: 174px; height: 150px; margin: 0 auto 22px; display: flex; align-items: center; justify-content: center; font-size: 6.5rem; filter: drop-shadow(0 12px 15px rgba(0,0,0,.35)); transform-origin: center bottom; animation: packageShake .65s ease-in-out 2; }
+    .package-gift::after { content: '🎁'; position: absolute; inset: 0; display: grid; place-items: center; }
+    .package-reveal-number { opacity: 0; transform: translateY(38px) scale(.35); color: #ffe08a; font-size: clamp(5rem, 22vw, 8rem); font-weight: 1000; line-height: 1; text-shadow: 0 5px 0 #8f452f, 0 10px 28px rgba(0,0,0,.45); }
+    .package-reveal-overlay.opened .package-gift { animation: packageOpen .55s ease-in forwards; }
+    .package-reveal-overlay.opened .package-reveal-number { animation: numberFromPackage .7s cubic-bezier(.18,.85,.25,1.25) .35s forwards; }
+    @keyframes packageShake { 0%,100% { transform: rotate(0) translateY(0); } 20% { transform: rotate(-8deg) translateY(-4px); } 40% { transform: rotate(8deg) translateY(0); } 60% { transform: rotate(-6deg) translateY(-3px); } 80% { transform: rotate(6deg); } }
+    @keyframes packageOpen { to { transform: translateY(-75px) scale(.55) rotate(-12deg); opacity: 0; } }
+    @keyframes numberFromPackage { to { opacity: 1; transform: translateY(-25px) scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .package-gift, .package-reveal-overlay.opened .package-gift, .package-reveal-overlay.opened .package-reveal-number { animation-duration: .01ms; animation-delay: 0ms; } }
     .choice-confirm-overlay { position: fixed; inset: 0; z-index: 2147483645; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(39, 24, 17, .72); backdrop-filter: blur(5px); }
     .choice-confirm-overlay.visible { display: flex; }
     .choice-confirm-box { width: 100%; max-width: 360px; padding: 30px 24px; border: 2px solid #c98a69; border-radius: 24px; background: #fffaf2; color: #39271f; text-align: center; box-shadow: 0 18px 60px rgba(0,0,0,.3); }
@@ -218,6 +231,14 @@
       <div id="gameBoard" class="grid"></div>
       <div id="loserNotice" class="loser-box" style="display:none;"></div>
       <button type="button" id="btnRestart" style="display:none; margin-top:15px; background:var(--accent);" onclick="clearGameSave(); location.reload()">Nuova Partita 🔄</button>
+    </div>
+  </div>
+
+  <div id="packageRevealOverlay" class="package-reveal-overlay" aria-live="assertive" aria-atomic="true">
+    <div class="package-reveal-box">
+      <div class="package-reveal-label">IL PACCO SI APRE...</div>
+      <div class="package-gift" aria-hidden="true"></div>
+      <div id="packageRevealNumber" class="package-reveal-number"></div>
     </div>
   </div>
 
@@ -633,6 +654,28 @@
       if (notice) notice.style.display = 'none';
     }
 
+    let packageRevealTimer = null;
+    function showNumberPackage(num) {
+      const overlay = document.getElementById('packageRevealOverlay');
+      const number = document.getElementById('packageRevealNumber');
+      if (!overlay || !number) return;
+      if (packageRevealTimer) clearTimeout(packageRevealTimer);
+      overlay.classList.remove('opened');
+      number.textContent = '';
+      overlay.classList.add('visible');
+      // Forza il riavvio dell'animazione anche per estrazioni consecutive.
+      void overlay.offsetWidth;
+      packageRevealTimer = setTimeout(() => {
+        number.textContent = num;
+        overlay.classList.add('opened');
+      }, 1150);
+      packageRevealTimer = setTimeout(() => {
+        overlay.classList.remove('visible', 'opened');
+        number.textContent = '';
+        packageRevealTimer = null;
+      }, 3000);
+    }
+
     function processRevealTile(num) {
       const element = document.querySelector(`.tile[data-num="${num}"]`);
       if (!element || element.classList.contains('revealed') || activePlayers.length <= 1) return;
@@ -642,6 +685,7 @@
       const currentPlayer = oldPlayers[currentIndex];
 
       element.classList.add('revealed');
+      showNumberPackage(num);
       annunciaNumeroSmorfia(num);
       const savedPlayers = Object.keys(secrets).filter(p => secrets[p] === num && activePlayers.includes(p));
 
