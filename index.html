@@ -223,53 +223,81 @@
     let players = [], secrets = {}, choiceIndex = 0, selectedTempNum = null, activePlayers = [], turnIndex = 0, myName = '';
     let smorfiaVoiceEnabled = false;
 
-    let introMusicPlayed = false;
-    let introAudioContext = null;
+    let gameAudioContext = null;
+    let gameMusicTimer = null;
+    let gameMusicPlaying = false;
+    let gameMusicMaster = null;
 
-    // Breve jingle originale in stile bar: tenta all'apertura e, se il browser
-    // blocca l'audio automatico, riprova al primo tocco dell'utente.
-    function playIntroMusic() {
-      if (introMusicPlayed) return;
+    // Musica originale allegra e leggera, in loop solo durante la partita.
+    function unlockGameAudio() {
       try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) return;
-        if (!introAudioContext) introAudioContext = new AudioContextClass();
-        const ctx = introAudioContext;
-        const begin = () => {
-          if (introMusicPlayed) return;
-          introMusicPlayed = true;
+        if (!gameAudioContext) gameAudioContext = new AudioContextClass();
+        if (gameAudioContext.state === 'suspended') gameAudioContext.resume().catch(() => {});
+      } catch (error) {}
+    }
+
+    function startGameMusic() {
+      if (gameMusicPlaying) return;
+      unlockGameAudio();
+      if (!gameAudioContext) return;
+      const ctx = gameAudioContext;
+      const begin = () => {
+        if (gameMusicPlaying || ctx.state !== 'running') return;
+        gameMusicPlaying = true;
+        gameMusicMaster = ctx.createGain();
+        gameMusicMaster.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gameMusicMaster.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 0.5);
+        gameMusicMaster.connect(ctx.destination);
+
+        const phrase = () => {
+          if (!gameMusicPlaying || ctx.state !== 'running') return;
+          // Piccola melodia originale, diversa dal jingle iniziale.
           const notes = [
-            [523.25, 0], [659.25, 0.18], [783.99, 0.36],
-            [659.25, 0.56], [698.46, 0.78], [783.99, 0.98],
-            [659.25, 1.18], [523.25, 1.42]
+            [392.00, 0], [493.88, 0.22], [587.33, 0.44], [493.88, 0.66],
+            [440.00, 0.92], [523.25, 1.14], [659.25, 1.36], [523.25, 1.58],
+            [349.23, 1.84], [440.00, 2.06], [523.25, 2.28], [440.00, 2.50]
           ];
-          const startAt = ctx.currentTime + 0.06;
+          const startAt = ctx.currentTime + 0.04;
           notes.forEach(([frequency, offset]) => {
-            const oscillator = ctx.createOscillator();
+            const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            oscillator.type = 'triangle';
-            oscillator.frequency.value = frequency;
+            osc.type = 'sine';
+            osc.frequency.value = frequency;
             gain.gain.setValueAtTime(0.0001, startAt + offset);
-            gain.gain.exponentialRampToValueAtTime(0.11, startAt + offset + 0.025);
-            gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.17);
-            oscillator.connect(gain);
-            gain.connect(ctx.destination);
-            oscillator.start(startAt + offset);
-            oscillator.stop(startAt + offset + 0.19);
+            gain.gain.exponentialRampToValueAtTime(0.22, startAt + offset + 0.035);
+            gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.19);
+            osc.connect(gain);
+            gain.connect(gameMusicMaster);
+            osc.start(startAt + offset);
+            osc.stop(startAt + offset + 0.21);
           });
+          gameMusicTimer = window.setTimeout(phrase, 2800);
         };
-        if (ctx.state === 'running') begin();
-        else ctx.resume().then(begin).catch(() => {});
-      } catch (error) {
-        // Alcuni browser richiedono un'interazione prima di consentire l'audio.
+        phrase();
+      };
+      if (ctx.state === 'running') begin();
+      else ctx.resume().then(begin).catch(() => {});
+    }
+
+    function stopGameMusic() {
+      gameMusicPlaying = false;
+      if (gameMusicTimer) window.clearTimeout(gameMusicTimer);
+      gameMusicTimer = null;
+      if (gameMusicMaster && gameAudioContext) {
+        const master = gameMusicMaster;
+        master.gain.cancelScheduledValues(gameAudioContext.currentTime);
+        master.gain.setTargetAtTime(0.0001, gameAudioContext.currentTime, 0.12);
+        window.setTimeout(() => { try { master.disconnect(); } catch (error) {} }, 600);
+        gameMusicMaster = null;
       }
     }
 
-    function setupIntroMusic() {
-      playIntroMusic();
+    function setupGameAudio() {
       const unlock = () => {
-        playIntroMusic();
-        if (introMusicPlayed) {
+        unlockGameAudio();
+        if (gameAudioContext && gameAudioContext.state === 'running') {
           window.removeEventListener('pointerdown', unlock);
           window.removeEventListener('keydown', unlock);
           window.removeEventListener('touchstart', unlock);
@@ -285,7 +313,7 @@
       document.getElementById('btnMultiMode').addEventListener('click', showMultiplayerSetup);
       document.getElementById('btnCreateRoom').addEventListener('click', createRoomWithText);
       document.getElementById('btnJoinRoom').addEventListener('click', joinRoom);
-      setupIntroMusic();
+      setupGameAudio();
     });
 
 
@@ -488,6 +516,7 @@
     }
 
     function startGame() {
+      startGameMusic();
       document.getElementById('fase2').style.display = 'none'; document.getElementById('fase3').style.display = 'block';
       activePlayers = [...players]; turnIndex = 0;
       const board = document.getElementById('gameBoard'); board.innerHTML = '';
@@ -558,12 +587,14 @@
         }
 
         if (activePlayers.length === 1) {
+          stopGameMusic();
           document.getElementById('gameTurn').style.display = 'none';
           document.getElementById('loserNotice').style.display = 'block';
           document.getElementById('loserNotice').innerText = `☕ ${activePlayers[0]} PAGA IL CAFFÈ PER TUTTI!`;
           document.getElementById('btnRestart').style.display = 'block';
           return;
         } else if (activePlayers.length === 0) {
+          stopGameMusic();
           document.getElementById('gameTurn').style.display = 'none';
           document.getElementById('loserNotice').style.display = 'block';
           document.getElementById('loserNotice').innerText = '☕ PAREGGIO! PAGATE IL CAFFÈ INSIEME!';
