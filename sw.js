@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gioco-del-caffe-v16';
+const CACHE_NAME = 'gioco-del-caffe-v17';
 const APP_SHELL = [
   './',
   './index.html',
@@ -31,6 +31,27 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Le pagine HTML devono essere sempre aggiornate dalla rete:
+  // la cache resta solo come ripiego quando il telefono è offline.
+  const isPageRequest = request.mode === 'navigate' || url.pathname.endsWith('/index.html');
+  if (isPageRequest) {
+    event.respondWith(
+      fetch(request).then((response) => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      }).catch(async () => {
+        return (await caches.match(request)) ||
+          (await caches.match('./index.html')) ||
+          Response.error();
+      })
+    );
+    return;
+  }
+
+  // Risorse statiche: cache-first per mantenere il supporto offline.
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
@@ -40,7 +61,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
-      }).catch(() => caches.match('./index.html'));
+      });
     })
   );
 });
