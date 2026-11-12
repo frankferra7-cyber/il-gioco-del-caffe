@@ -79,6 +79,7 @@
     .payer-screen .payer-emoji { font-size: clamp(4rem, 18vw, 7rem); margin-bottom: 18px; }
     .payer-screen h2 { color: #ffe08a; font-size: clamp(2.2rem, 10vw, 4rem); line-height: 1.08; margin-bottom: 20px; }
     .payer-screen p { color: #fff8df; font-size: clamp(1.2rem, 5vw, 1.7rem); line-height: 1.45; }
+    .btn-exit { display:none; width:100%; margin-top:14px; background:#fff4e8; color:#8c342e; border:1px solid #c98a69; box-shadow:none; }
     .player-tag { display: inline-block; background: var(--tile-bg); border: 1px solid var(--accent); padding: 6px 12px; border-radius: 12px; margin: 4px; font-size: 0.9em; }
     .room-code { font-size: 2.2em; letter-spacing: 4px; color: var(--gold); margin: 10px 0; }
     .section-title { font-size: 0.95em; color: var(--accent); font-weight: bold; margin-top: 12px; text-transform: uppercase; letter-spacing: 1px; }
@@ -232,6 +233,7 @@
       <div id="loserNotice" class="loser-box" style="display:none;"></div>
       <button type="button" id="btnRestart" style="display:none; margin-top:15px; background:var(--accent);" onclick="clearGameSave(); location.reload()">Nuova Partita 🔄</button>
     </div>
+    <button type="button" id="btnExitGame" class="btn-exit" onclick="exitGame()">🚪 Esci dalla partita</button>
   </div>
 
   <div id="packageRevealOverlay" class="package-reveal-overlay" aria-live="assertive" aria-atomic="true">
@@ -296,6 +298,22 @@
       try { localStorage.removeItem(GAME_SAVE_KEY); } catch (error) {}
     }
 
+    function showExitButton() {
+      const button = document.getElementById('btnExitGame');
+      if (button) button.style.display = 'block';
+    }
+
+    function exitGame() {
+      if (!confirm('Vuoi uscire dalla partita? La partita salvata su questo telefono verrà cancellata.')) return;
+      clearGameSave();
+      try { if (gameCleanupTimer) clearTimeout(gameCleanupTimer); } catch (error) {}
+      try { if (peer && !peer.destroyed) peer.destroy(); } catch (error) {}
+      try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (error) {}
+      connections = []; hostConn = null; peer = null;
+      window.gameRoomCode = '';
+      window.location.reload();
+    }
+
     // A partita conclusa elimina il salvataggio locale e libera la stanza multiplayer.
     let gameCleanupTimer = null;
     function finishGameCleanup() {
@@ -315,6 +333,7 @@
     }
 
     function restoreGameState(state) {
+      showExitButton();
       if (!state || state.phase !== 'game' || !Array.isArray(state.players) ||
           !state.players.length || !state.secrets) return;
       restoringSavedGame = true;
@@ -465,6 +484,7 @@
     }
 
     function startSinglePhoneMode() {
+      showExitButton();
       myName = document.getElementById('pName').value.trim();
       if (!myName) return alert("Inserisci il tuo nome!");
       players = [myName];
@@ -495,6 +515,7 @@
     }
 
     function showMultiplayerSetup() {
+      showExitButton();
       myName = document.getElementById('pName').value.trim();
       if (!myName) return alert("Inserisci prima il tuo nome nel campo in alto!");
       document.getElementById('faseInit').style.display = 'none';
@@ -615,7 +636,7 @@
     function broadcast(data) { connections.forEach(conn => conn.send(data)); }
     function renderLobbyPlayers() { document.getElementById('playerListLobby').innerHTML = players.map(p => `<span class="player-tag">${escapeHtml(p)}</span>`).join(''); }
     function startMultiChoicePhase() { broadcast({ type: 'START_CHOICE' }); startMultiChoicePhaseLocal(); }
-    function startMultiChoicePhaseLocal() { document.getElementById('faseLobby').style.display = 'none'; document.getElementById('fase2').style.display = 'block'; renderChoiceGridMulti(); }
+    function startMultiChoicePhaseLocal() { showExitButton(); document.getElementById('faseLobby').style.display = 'none'; document.getElementById('fase2').style.display = 'block'; renderChoiceGridMulti(); }
 
     function renderChoiceGridMulti() {
       selectedTempNum = null; closeChoiceConfirm();
@@ -631,7 +652,7 @@
       }
     }
 
-    function startChoicePhase() { document.getElementById('faseInit').style.display = 'none'; document.getElementById('fase2').style.display = 'block'; choiceIndex = 0; renderChoiceGrid(); }
+    function startChoicePhase() { showExitButton(); document.getElementById('faseInit').style.display = 'none'; document.getElementById('fase2').style.display = 'block'; choiceIndex = 0; renderChoiceGrid(); }
 
     function renderChoiceGrid() {
       selectedTempNum = null; document.getElementById('btnConfirmChoice').style.display = 'none';
@@ -673,6 +694,7 @@
     }
 
     function startGame() {
+      showExitButton();
       document.getElementById('fase2').style.display = 'none'; document.getElementById('fase3').style.display = 'block';
       activePlayers = [...players]; turnIndex = 0;
       const board = document.getElementById('gameBoard'); board.innerHTML = '';
