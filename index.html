@@ -501,18 +501,43 @@
       document.getElementById('faseMultiSetup').style.display = 'block';
     }
 
+    function showRoomSetupError(message) {
+      const status = document.getElementById('lobbyStatus');
+      if (status) status.innerText = message;
+      document.getElementById('faseLobby').style.display = 'none';
+      document.getElementById('faseMultiSetup').style.display = 'block';
+      try { if (peer && !peer.destroyed) peer.destroy(); } catch (error) {}
+      peer = null; hostConn = null; connections = [];
+      isMultiplayer = false; isHost = false;
+      window.gameRoomCode = '';
+    }
+
     function createRoomWithText() {
-      let customCode = document.getElementById('createRoomInput').value.trim().toUpperCase() || Math.floor(1000 + Math.random() * 9000).toString();
+      const customCode = document.getElementById('createRoomInput').value.trim().toUpperCase() || Math.floor(1000 + Math.random() * 9000).toString();
+      const peerId = 'caffe-game-' + customCode.replace(/[^a-zA-Z0-9]/g, '');
+      if (peerId === 'caffe-game-') return alert('Inserisci un codice stanza valido (lettere e numeri).');
+      try { if (peer && !peer.destroyed) peer.destroy(); } catch (error) {}
+      connections = []; hostConn = null;
       window.gameRoomCode = customCode;
       isMultiplayer = true; isHost = true; players = [myName];
       document.getElementById('faseMultiSetup').style.display = 'none';
       document.getElementById('faseLobby').style.display = 'block';
-      document.getElementById('lobbyStatus').innerText = 'Stanza creata! In attesa degli altri giocatori...';
+      document.getElementById('lobbyStatus').innerText = 'Creazione della stanza in corso...';
       document.getElementById('roomCodeDisplay').style.display = 'block';
       document.getElementById('roomCodeDisplay').innerText = `CODICE STANZA: ${customCode}`;
-      peer = new Peer('caffe-game-' + customCode.replace(/[^a-zA-Z0-9]/g, ''));
-      peer.on('open', () => { renderLobbyPlayers(); document.getElementById('btnHostStart').style.display = 'block'; });
-      peer.on('error', (err) => { if(err.type === 'unavailable-id') { alert('Stanza già in uso!'); location.reload(); } });
+      document.getElementById('btnHostStart').style.display = 'none';
+      peer = new Peer(peerId);
+      peer.on('open', () => {
+        document.getElementById('lobbyStatus').innerText = 'Stanza pronta! In attesa degli altri giocatori...';
+        renderLobbyPlayers();
+        document.getElementById('btnHostStart').style.display = 'block';
+      });
+      peer.on('error', (err) => {
+        const message = err && err.type === 'unavailable-id'
+          ? 'Questo codice stanza è già occupato. Torna indietro e scegline un altro.'
+          : 'Non riesco a creare la stanza. Controlla la connessione e riprova.';
+        showRoomSetupError(message);
+      });
       peer.on('connection', (conn) => {
         connections.push(conn);
         conn.on('data', (data) => handleHostMessage(data, conn));
@@ -521,20 +546,43 @@
     }
 
     function joinRoom() {
-      let code = document.getElementById('roomInput').value.trim().toUpperCase();
+      const code = document.getElementById('roomInput').value.trim().toUpperCase();
+      const peerId = 'caffe-game-' + code.replace(/[^a-zA-Z0-9]/g, '');
+      if (!code || peerId === 'caffe-game-') return alert('Inserisci un codice stanza valido.');
+      try { if (peer && !peer.destroyed) peer.destroy(); } catch (error) {}
+      connections = []; hostConn = null;
       window.gameRoomCode = code;
-      if (!code) return alert("Inserisci il codice della stanza!");
       isMultiplayer = true; isHost = false;
       document.getElementById('faseMultiSetup').style.display = 'none';
       document.getElementById('faseLobby').style.display = 'block';
       document.getElementById('lobbyStatus').innerText = 'Connessione alla stanza in corso...';
       peer = new Peer();
+      let connectionTimer = setTimeout(() => {
+        showRoomSetupError('La stanza non risponde. Verifica il codice e che chi l’ha creata sia ancora collegato.');
+      }, 15000);
       peer.on('open', () => {
-        hostConn = peer.connect('caffe-game-' + code.replace(/[^a-zA-Z0-9]/g, ''));
-        hostConn.on('open', () => { hostConn.send({ type: 'JOIN', name: myName }); });
+        hostConn = peer.connect(peerId, { reliable: true });
+        hostConn.on('open', () => {
+          clearTimeout(connectionTimer);
+          hostConn.send({ type: 'JOIN', name: myName });
+          document.getElementById('lobbyStatus').innerText = 'Collegato alla stanza!';
+        });
         hostConn.on('data', handleClientMessage);
+        hostConn.on('error', () => {
+          clearTimeout(connectionTimer);
+          showRoomSetupError('Errore di collegamento alla stanza. Riprova.');
+        });
+        hostConn.on('close', () => {
+          if (document.getElementById('faseLobby').style.display !== 'none') {
+            clearTimeout(connectionTimer);
+            showRoomSetupError('La connessione alla stanza è stata chiusa. Verifica che l’host sia online.');
+          }
+        });
       });
-      peer.on('error', () => { alert('Stanza non trovata!'); location.reload(); });
+      peer.on('error', () => {
+        clearTimeout(connectionTimer);
+        showRoomSetupError('Connessione non riuscita. Controlla Internet e riprova.');
+      });
     }
 
     function handleHostMessage(data, conn) {
@@ -755,10 +803,16 @@
     }
 
     if ('serviceWorker' in navigator) {
+      let refreshingForUpdate = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshingForUpdate) return;
+        refreshingForUpdate = true;
+        window.location.reload();
+      });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
-          console.warn('Service worker non disponibile:', err);
-        });
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+          .then(registration => registration.update())
+          .catch(err => console.warn('Service worker non disponibile:', err));
       });
     }
   </script>
